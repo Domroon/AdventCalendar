@@ -47,6 +47,8 @@ class Led():
         self.num = num
         self.value = [0, 0, 0]
         self.decrease = False
+        self.timer = Timer(0)
+        self.was_switched_on = False
 
     def set_color(self, color=[20, 20, 20]):
         self.value = color
@@ -95,15 +97,103 @@ class Timer():
             return False
 
 
-def show_startup(np):
-    for i in range(0,24):
-        np[i] = (255, 255, 255)
-        np.write()
-        time.sleep(0.1)
-        np[i] = (0, 0, 0)
-        np.write()
+class Animation():
+    def __init__(self, np, logger):
+        self.np = np
+        self.logger = logger
+        self.leds = []
+        self.animations_qty = 1
+        self.current_animation = randint(0, self.animations_qty)
+        self.timer = Timer(randint(5000, 10000))
+        self.timer.start()
 
+    def show_startup(self):
+        for i in range(0,24):
+            self.np[i] = (255, 255, 255)
+            self.np.write()
+            time.sleep(0.1)
+            self.np[i] = (0, 0, 0)
+            self.np.write()
 
+    def _init_pulse_1(self, qty_leds):
+        for _ in range(0, qty_leds):
+            self.leds.append(Led(randint(0, 23), self.np))
+
+    def _show_pulse_1(self):
+        for i, led in enumerate(self.leds):
+            if led.value == [0, 0, 0]:
+                led = Led(randint(0, 23), self.np)
+                self.leds[i] = led
+        for led in self.leds:
+            led.pulse_led(steps_per_loop=randint(0, 1))
+
+    def _init_pulse_2(self, qty_leds):
+        for _ in range(0, qty_leds):
+            self.leds.append(Led(randint(0, 23), self.np))
+
+        for led in self.leds:
+            random_time = randint(5000, 10000)
+            led.timer.timer_duration = random_time
+            led.timer.start()
+
+    def _show_pulse_2(self):
+        for led in self.leds:
+            if led.timer.check_time_over() and not led.was_switched_on:
+                led.increase_brightness_red()
+            if led.value[0] >= 255:
+                led.was_switched_on = True
+            if led.was_switched_on:
+                led.decrease_brightness_red()
+            if led.was_switched_on and led.value == [0, 0, 0]:
+                led.was_switched_on = False
+                self.leds.remove(led)
+                new_led = Led(randint(0, 23), self.np)
+                random_time = randint(1000, 15000)
+                led.timer.timer_duration = random_time
+                self.leds.append(new_led)
+        time.sleep(0.015)
+
+    def _show_turn_on_successively(self):
+        for led_num in CALENDAR_LIST:
+            new_led = Led(led_num, self.np)
+            new_led.set_color([100, 0, 0])
+            self.np.write()
+            time.sleep(1)
+        for led_num in reversed(CALENDAR_LIST):
+            new_led = Led(led_num, self.np)
+            new_led.set_color([0, 0, 0])
+            self.np.write()
+            time.sleep(1)
+
+    def show(self):
+        if self.current_animation == 0:
+            pass
+
+        if self.current_animation == 1:
+            self._show_pulse_1()
+
+        if self.timer.check_time_over():
+            self.np.fill([0, 0, 0])
+            self.leds.clear()
+
+            random_time = randint(5000, 10000)
+            self.timer.timer_duration = random_time
+            self.current_animation = (randint(0, self.animations_qty))
+
+            if self.current_animation == 0:
+                self.logger.info("Show Animation Pulse 1 for ", random_time, " ms")
+                led_qty = randint(2, 6)
+                self._init_pulse_1(led_qty)
+                self._show_pulse_1()
+            elif self.current_animation == 1:
+                self.logger.info("Show Animation Pulse 2 for ", random_time, " ms")
+                led_qty = randint(2, 6)
+                self._init_pulse_2(led_qty)
+                self._show_pulse_2()
+                
+            self.timer.restart()
+
+    
 def set_time():
     ntptime.settime()
     
@@ -119,8 +209,11 @@ def main():
     client = Client(logger)
     pin = Pin(MATRIX_PIN, Pin.OUT)
     np = NeoPixel(pin, 24)
+    animation = Animation(np, logger)
+
+    animation._init_pulse_2(5)
     
-    show_startup(np)
+    animation.show_startup()              
     client.activate()
     client.search_wlan()
     try:
@@ -141,27 +234,6 @@ def main():
     logger.info("Date: ", actual_time[2], ".", actual_time[1], ".", actual_time[0])
     logger.info("Time: ", actual_time[3], ":", actual_time[4], ":", actual_time[5])
 
-    animation_leds = [
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np)
-    ]
-
-    more_animation_leds = [
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np),
-        Led(randint(0, 23), np)
-    ]
-
     simulation_timer = Timer(2000)
     simulation_timer.start()
 
@@ -179,37 +251,25 @@ def main():
                 day = 1
             logger.info("Simulate Day: ", day)
 
-        if day > 24:
-            for i, led in enumerate(more_animation_leds):
-                if led.value == [0, 0, 0]:
-                    led = Led(randint(0, 23), np)
-                    more_animation_leds[i] = led
-            for led in more_animation_leds:
-                led.pulse_led(steps_per_loop=randint(0, 1))
-
-            np.write()
-            time.sleep(0.005)
-        else:
-            # past days
+        # past days
+        if day <= 24:
             for past_day in range(1, day):
                 past_day_led  = Led(CALENDAR_LIST[past_day-1], np)
                 past_day_led.set_color([0, 20, 0])
 
-            # animation leds
-            for i, led in enumerate(animation_leds):
-                if led.value == [0, 0, 0]:
-                    led = Led(randint(0, 23), np)
-                    animation_leds[i] = led
-            for led in animation_leds:
-                led.pulse_led(steps_per_loop=randint(0, 1))
+        # animation leds
+        # animation.show()
+        animation._show_pulse_2()
+        # animation._show_turn_on_successively()
 
-            # actual day led
+        # actual day led
+        if day <= 24:
             led_num = CALENDAR_LIST[day-1]
             day_led = Led(led_num, np)
             day_led.set_color([255, 255, 255])
 
-            np.write()
-            time.sleep(0.005)
+        np.write()
+        time.sleep(0.005)
     
 
 if __name__ == '__main__':
