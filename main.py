@@ -10,7 +10,7 @@ from networking import ConnectionError
 
 
 MATRIX_PIN = 32
-UTC_OFFSET = 0 * 60 * 60
+UTC_OFFSET = 1 * 60 * 60
 DAY_SIMULATION = False
 
 CALENDAR_LIST = [
@@ -103,6 +103,7 @@ def show_startup(np):
         np[i] = (0, 0, 0)
         np.write()
 
+
 def set_time():
     ntptime.settime()
     
@@ -132,8 +133,11 @@ def main():
         np[23] = (100, 0, 0)
         np.write()
         
+    ntptime.settime()
+    actual_utc_time = time.localtime()
+    logger.info("Received actual datetime: ", actual_utc_time)
     actual_time = get_local_time()
-    logger.info("Received actual datetime: ", actual_time)
+    logger.info("Datetime for german timezone: ", actual_time)
     logger.info("Date: ", actual_time[2], ".", actual_time[1], ".", actual_time[0])
     logger.info("Time: ", actual_time[3], ":", actual_time[4], ":", actual_time[5])
 
@@ -162,6 +166,7 @@ def main():
     simulation_timer.start()
 
     day = actual_time[2]
+    logger.info("actual day: ", day)
 
     while True:
         if not DAY_SIMULATION:
